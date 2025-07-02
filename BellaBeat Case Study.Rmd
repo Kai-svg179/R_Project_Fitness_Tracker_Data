@@ -1,3 +1,4 @@
+
 ---
 title: "BellaBeat Case Study"
 author: "Yanxi"
