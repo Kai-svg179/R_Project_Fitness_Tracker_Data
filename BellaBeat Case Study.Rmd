@@ -1,0 +1,283 @@
+---
+title: "BellaBeat Case Study"
+author: "Yanxi"
+date: "2025-05-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Statement of Business Task
+
+Analyze FitBit Fitness Tracker Data to identify trends in smart device usage that can inform BellaBeat's marketing strategy and drive market growth.
+
+---
+
+## Loading Packages
+
+```{r loading}
+
+install.packages("tidyverse")
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(lubridate)
+```
+
+
+## Importing Datasets
+
+```{r}
+
+setwd("/cloud/project/Fitabase Data 4.12.16-5.12.16")
+sleep <- read.csv("sleepDay_merged.csv")
+activity <- read.csv("dailyActivity_merged.csv")
+hourly_steps <- read.csv("hourlySteps_merged.csv")
+```
+
+
+## Inspecting and Cleaning Sleep Dataset
+
+```{r}
+
+# Glance at the dataset
+head(sleep)
+str(sleep)
+glimpse(sleep)
+colnames(sleep)
+
+sleep %>% 
+  select(TotalSleepRecords,
+         TotalMinutesAsleep,
+         TotalTimeInBed) %>% 
+  summary()
+
+n_distinct(sleep$Id)
+```
+
+Now I had a general idea about this dataset - it tracks partcipants' number of sleep records (normally 1 but more if the individual takes naps during daytime), length of sleep and length of time in bed over a period of time, so each participant has multiple entries of record. There are records for 24 distinct users across different days.
+
+```{r}
+# Check for duplicates
+duplicates <- sleep[duplicated(sleep), ]
+sleep <- sleep[!duplicated(sleep), ]
+
+```
+
+I checked if there were any duplicates in this dataset. It turned out there were three duplicated records.
+I removed the duplicated records and updated the dataset.
+
+```{r}
+# Check for missing values
+any_na <- any(is.na(sleep))
+print(paste("Are there any missing values?", any_na))
+
+na_by_column <- colSums(is.na(sleep))
+print("Missing values per column:")
+print(na_by_column)
+
+```
+
+I tried two ways to detect missing values: one checks the dataset as a whole for missing values, the other checks by columns. is.na() function returns TRUE/FALSE for missing values.
+There were no missing values, and I was ready to proceed.
+
+```{r}
+# Convert to date format for tidyness
+sleep$SleepDay <- as.Date(sleep$SleepDay, format = "%m/%d/%Y")
+print(head(sleep$SleepDay))
+class(sleep$SleepDay)
+
+```
+
+The SleepDay data was recorded in strings and involved unnecessary time component, so I converted the data to date format. print() and class() to double check if the conversion was successful.
+
+```{r}
+# Detect (and Removing) Outliers
+std_dev <- sd(sleep$TotalTimeInBed) 
+mean <- mean(sleep$TotalTimeInBed)
+upper_bound <- mean + 3 * std_dev
+lower_bound <- mean - 3 * std_dev
+outliers <- sleep %>% 
+  filter(TotalTimeInBed > upper_bound | TotalTimeInBed < lower_bound)
+print(outliers)
+```
+
+Here, an outlier was defined as having a value below or over 3 standard deviations away from the mean. I first computed the mean and the standard deviation, and then calculated the lower and upper bounds. Values outside this domain were classified as an outlier.
+
+10 outliers were detected under this definition, but I took a closer look at the data and found that these observations still display a positive correlation between TotalMinutesAsleep and TotalTimeInBed, which is a very relevant correlation. So I decided to keep these datapoints.
+
+Now this data set is fully prepared for further analysis. I then performed similar procedures with other datasets.
+
+## Inspecting and Cleaning Activity Dataset
+
+```{r}
+
+# Glance at the dataset
+head(activity)
+glimpse(activity)
+str(activity)
+colnames(activity)
+n_distinct(activity$Id)
+```
+
+This is a dataset about activity data, including total steps, distances travelled categorized by activity intensity (very active, moderately active, light active, and sedentary), the time spent at each intensity level, and calories (burned). There are records for 33 distinct users across different days, which is the maximum distinct users we have for this case study. The size of this sample is considered sufficient.
+
+```{r}
+ggplot(data = activity) +
+  geom_point(mapping = aes(x = TotalSteps, y = Calories))
+
+```
+
+Here I generated a quick plot to confirm if "Calories" IS calories burned. From the plot we can easily spot a positive correlation between total steps and calories, so it's reasonable to assume that Calories refer to calories burned (instead of consumed). However, I think that in a working environment, it's wiser to check with people who have more information about this dataset if possible, so as to avoid misinterpreting the data and coming to a skewed conclusion.
+
+```{r}
+# Converting Date Format
+activity$ActivityDate <- as.Date(activity$ActivityDate, format = "%m/%d/%Y")
+
+```
+
+I converted the date format in this dataset to Year-Month-day for consistency.
+
+```{r}
+# Check for duplicates
+duplicates <- activity[duplicated(activity), ]
+
+```
+
+There is no duplicate in this dataset. 
+
+```{r}
+# Check for missing values
+any_na <- any(is.na(activity))
+print(any_na)
+
+```
+
+It returned FALSE, so there isn't any missing value. 
+Now this dataset is also clean.
+
+## Inspecting and Cleaning Hourly Steps Dataset
+
+```{r}
+
+# Get a general idea about this dataset
+head(hourly_steps)
+glimpse(hourly_steps)
+str(hourly_steps)
+colnames(hourly_steps)
+n_distinct(hourly_steps$Id)
+```
+
+This is a dataset about number of steps taken measured by hours, which can givesus insights about when users are most and least active. This dataset contains data for 33 distinct users across different days, representing the full cohort available for this case study. The size of this sample is considered sufficient.
+
+However, the date-time was stored as strings instead of proper date-time format, I needed to fix this.
+
+```{r}
+
+hourly_steps$ActivityHour = as.POSIXct(hourly_steps$ActivityHour, format = "%m/%d/%Y %I:%M:%S %p", tz=Sys.timezone())
+
+```
+
+Now the data has been transformed into a POSIXct format and is ready to be used.
+
+```{r}
+
+# Duplicates
+duplicates <- hourly_steps[duplicated(hourly_steps), ]
+```
+
+Again, no duplicates.
+
+```{r}
+
+# Missing values
+missing_value <- any(is.na(hourly_steps))
+print(missing_value)
+```
+
+There are also no missing values, the quality of the datasets involved in this case study is good.
+
+# Evaluation of the data:
+The collection of the datasets we use for this case comes from Kaggle, which has a usability score of 9.41, indicating that it's complete and credible. Upon inspection, there are only a couple of duplicates and no missing values, further confirming its credibility. However, this dataset collection does have limitations. The first limitation is the lack of column descriptions, which could potentially lead to misinterpretation and, subsequently, inaccurate conclusions. The second limitation is that although the important datasets encompass the maximum available distinct participants, the sample size of 30 is generally considered small and may therefore not be representative of the entire female population. Furthermore, the dataset description does not specify the gender of the participants, so we cannot be certain if we are investigating what we intend to investigate. 
+If possible, we should request more data on female for a more accurate and representative reflection of the entire population. If not, we will have to be cautious when making conclusions and recommendations for actions, and always keep in mind that the whole analysis is conducted on a sample size of merely 30 people.
+
+---
+
+At this point, I was ready to dive deeper into the datasets, perform detailed analysis, create visualizations, and identify trends.
+
+## Plot from Sleep Dataset
+
+```{r}
+ggplot(data = sleep, aes(x = TotalTimeInBed, y = TotalMinutesAsleep)) +
+  geom_smooth() +
+  labs(title = "Impact of Total Time in Bed on Total Minutes Asleep")
+
+sleep_less_than_300 <- sum(sleep$TotalMinutesAsleep < 300)
+print(sleep_less_than_300 / nrow(sleep) * 100)
+
+sleep_less_than_360 <- sum(sleep$TotalMinutesAsleep < 360)
+print(sleep_less_than_360 / nrow(sleep) * 100)
+```
+
+In general, there is a strong positive correlation between total time in bed and sleep duration. Therefore, we can infer from the chart that the longer someone spends in time, the longer they tend to sleep. An interesting point is that people who spend an extremely long time in bed don't sleep proportionally more. This suggests these individuals might be struggling to fall asleep.  
+Furthermore, I noticed that there are a considerable number of observations with total sleep time less than 300 minutes (5 hours). I computed the exact number and found that 12% of observations fall into this category. This proportion jumps to 24.4% if we raise the threshold to 6 hours, which is still below the recommended hours of sleep. This suggests that many people are sleeping less (or much less)  than they should, which can be detrimental to their health.
+
+## Plot from Activity Combined with Sleep
+
+```{r}
+combined_activity_and_sleep <- activity %>% 
+  inner_join(sleep, by = c("Id" = "Id", "ActivityDate" = "SleepDay"))
+
+ggplot(data = combined_activity_and_sleep, aes(x = TotalMinutesAsleep, y = TotalSteps)) +
+  geom_smooth()
+
+```
+
+To gain deeper insights, I merged the Activity dataset with the Sleep dataset to investigate the correlation bewteen sleep duration and steps taken. The visualization of this combined data reveals a largely negative correlation, indicating that people with longer sleep durations tend to take fewer steps. This finding suggests an opportunity to target our product at individuals with higher sleep durations.
+
+
+## Plot from Hourly Steps
+
+```{r}
+
+average_hourly_steps <- hourly_steps %>% 
+  mutate(hour_of_day_int = hour(ActivityHour)) %>%
+  group_by(hour_of_day_int) %>% 
+  summarise(average_hourly_steps = mean(StepTotal))
+
+ggplot(data = average_hourly_steps, aes(x = as.factor(hour_of_day_int), y = average_hourly_steps)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average Steps Taken by Hours")
+
+```
+
+The dataset was originally recorded in date-time format, but I was more interested in the hourly data on average. So, I extracted the hour and performed an mean calculation for each hour of the day across different individuals and days. 
+
+From the bar chart, we can see that on average, activity starts at 7:00 or 8:00, presumably when most people get up. The most steps occur around 17:00 to 19:00, which makes sense because people normally take more steps after work, either for commuting or for exercising. However, a point worth noticing is that the average step remains high during the daytime, It's reasonable to deduce that, in general, our participants do not engage in prolonged desk-bound work. 
+But if we were to look at the entire female population, this may not hold true. Many females (as well as males) do work a corporate job in which they have little chance to move around during daytime. Hence, we would expect the steps taken during the daytime by the entire population to be fewer than what we observe in this dataset. This reminds us again that we are working with a fairly small sample and need to be cautious about the conclusions we draw. 
+
+However, this bar plot reveals a pattern that holds true for most people: activity levels reduce drastically from 20:00, with average steps falling sharply.       
+
+---
+
+# Key Findings and Recommendations for Marketing Strategy 
+
+The key takeaways from this analysis are: 
+
+* Total time in bed is positively correlated with sleep duration, meaning that people tend to sleep more if they spend more time in bed. So a recommendation based on this finding is that BellaBeat can highlight the app's notification features that helps users to get in bed early and sleep more.
+
+* Sleep durations for users with extremely long time in bed are not proportionally long. This insight provides a foundation for targeting mindfulness content at people who have sleep problems. 
+
+* This study reveals a shorter-than-six-hour sleep duration for over 20% of the sample observations. This suggests that BellaBeat can emphasize the app's ability to lead to better health decisions.
+
+* Individuals who sleep more tend to take fewer steps. This suggests that people with longer sleep durations may be a potentially promising market segment. It's recommended that Bellabeat target their products at these people and help them exercise more and enhance their health.
+
+* The finding that people are most active around 17:00 to 19:00 suggests that BellaBeat can schedule marketing emails or messages just before they start to get active, as this is the time when they are most likely to check their phones, making the marketing most effective. 
+
+* The analysis also finds that the activity level plummet from 20:00, which suggests that this is the time when people transition to a post-activity and pre-sleep phase. Thus, this is also the perfect time for BellaBeat to promote stress management and mindfulness features of the app. BellaBeat can send messages to help users unwind and prepare for the next day.  
+
+These recommendations provide preliminary guidance on the marketing strategy. 
+However, it has to be kept in mind that we are working with a small sample here, and that more data is required to make these conclusions more reliable. 
